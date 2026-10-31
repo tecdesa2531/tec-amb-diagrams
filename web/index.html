@@ -12,6 +12,10 @@
     <header id="barra">
       <span id="nombre-app">Ambito</span>
       <span id="nombre-archivo">Sin titulo</span>
+      <div id="barra-acciones">
+        <button id="btn-guardar">Guardar</button>
+        <button id="btn-guardar-como">Guardar como</button>
+      </div>
     </header>
 
     <aside id="paleta">
@@ -26,7 +30,8 @@
           </pattern>
         </defs>
         <rect id="fondo-cuadricula" width="100%" height="100%" fill="url(#patron-cuadricula)"/>
-        <!-- elementos del diagrama - Fase 2 -->
+        <!-- raiz: todos los elementos van dentro para que pan/zoom sea un solo transform -->
+        <g id="raiz"></g>
       </svg>
     </main>
 
@@ -35,6 +40,20 @@
     </aside>
 
   </div>
+  <!-- modal guardar como -->
+  <div id="modal-guardar-como" class="modal-fondo" hidden>
+    <div class="modal-caja" role="dialog" aria-modal="true" aria-labelledby="modal-titulo">
+      <h2 id="modal-titulo" class="modal-encabezado">Guardar como</h2>
+      <label class="modal-etiqueta" for="modal-nombre">Nombre del archivo</label>
+      <input id="modal-nombre" type="text" class="modal-input" autocomplete="off" spellcheck="false">
+      <p class="modal-hint">Solo letras, numeros, guiones y guion bajo. Sin extension.</p>
+      <div class="modal-acciones">
+        <button id="modal-cancelar" class="btn-secundario">Cancelar</button>
+        <button id="modal-confirmar" class="btn-primario">Guardar</button>
+      </div>
+    </div>
+  </div>
+
   <script type="module" src="/web/js/app.js"></script>
 </body>
 </html>

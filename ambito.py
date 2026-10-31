@@ -1,5 +1,7 @@
 import argparse
+import json
 import pathlib
+import shutil
 import socket
 import threading
 import webbrowser
@@ -53,6 +55,10 @@ def ruta_segura(base, relativa):
         return None
 
 
+def nombre_valido(nombre):
+    return bool(nombre) and all(c.isalnum() or c in "-_" for c in nombre)
+
+
 class ManejadorHTTP(BaseHTTPRequestHandler):
     carpeta_diagramas = None
     carpeta_iconos    = None
@@ -64,10 +70,61 @@ class ManejadorHTTP(BaseHTTPRequestHandler):
         ruta = self.path.split("?")[0]
         if ruta == "/":
             self._servir_archivo(RAIZ / "web" / "index.html")
+        elif ruta == "/api/diagramas":
+            self._listar_diagramas()
+        elif ruta.startswith("/api/diagramas/"):
+            self._leer_diagrama(ruta[len("/api/diagramas/"):])
         elif ruta.startswith("/web/"):
             self._servir_estatico(ruta[len("/web/"):])
         else:
             self._responder(404, b'{"error": "no encontrado"}', "application/json")
+
+    def do_PUT(self):
+        ruta = self.path.split("?")[0]
+        if ruta.startswith("/api/diagramas/"):
+            self._guardar_diagrama(ruta[len("/api/diagramas/"):])
+        else:
+            self._responder(404, b'{"error": "no encontrado"}', "application/json")
+
+    def _listar_diagramas(self):
+        carpeta = self.carpeta_diagramas
+        archivos = [p.stem for p in sorted(carpeta.glob("*.ambito")) if p.is_file()]
+        cuerpo = json.dumps(archivos).encode("utf-8")
+        self._responder(200, cuerpo, "application/json; charset=utf-8")
+
+    def _leer_diagrama(self, nombre):
+        if not nombre_valido(nombre):
+            self._responder(400, b'{"error": "nombre invalido"}', "application/json")
+            return
+        ruta = ruta_segura(self.carpeta_diagramas, nombre + ".ambito")
+        if ruta is None or not ruta.is_file():
+            self._responder(404, b'{"error": "no encontrado"}', "application/json")
+            return
+        self._servir_archivo(ruta)
+
+    def _guardar_diagrama(self, nombre):
+        if not nombre_valido(nombre):
+            self._responder(400, b'{"error": "nombre invalido"}', "application/json")
+            return
+        ruta = ruta_segura(self.carpeta_diagramas, nombre + ".ambito")
+        if ruta is None:
+            self._responder(400, b'{"error": "ruta invalida"}', "application/json")
+            return
+        longitud = int(self.headers.get("Content-Length", 0))
+        cuerpo = self.rfile.read(longitud)
+        try:
+            obj = json.loads(cuerpo.decode("utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            msg = json.dumps({"error": f"JSON invalido: {e}"}).encode("utf-8")
+            self._responder(400, msg, "application/json; charset=utf-8")
+            return
+        if obj.get("formato") != "ambito":
+            self._responder(400, b'{"error": "formato incorrecto"}', "application/json")
+            return
+        if ruta.exists():
+            shutil.copy2(ruta, ruta.with_suffix(".ambito.bak"))
+        ruta.write_text(json.dumps(obj, indent=2, ensure_ascii=False), encoding="utf-8")
+        self._responder(200, b'{"ok": true}', "application/json")
 
     def _servir_estatico(self, relativa):
         ruta = ruta_segura(RAIZ / "web", relativa)

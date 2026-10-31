@@ -12,6 +12,12 @@
     <header id="barra">
       <span id="nombre-app">Ambito</span>
       <span id="nombre-archivo">Sin titulo</span>
+      <div id="zoom-controles">
+        <button id="btn-zoom-menos" title="Alejar">-</button>
+        <span id="indicador-zoom">100%</span>
+        <button id="btn-zoom-mas" title="Acercar">+</button>
+        <button id="btn-ajustar" title="Ajustar a contenido (Ctrl+Shift+H)">Ajustar</button>
+      </div>
       <div id="barra-acciones">
         <button id="btn-guardar">Guardar</button>
         <button id="btn-guardar-como">Guardar como</button>
@@ -19,7 +25,7 @@
     </header>
 
     <aside id="paleta">
-      <!-- paleta de iconos - Fase 2 -->
+      <!-- construido dinamicamente por paleta.js -->
     </aside>
 
     <main id="lienzo-contenedor">
@@ -33,13 +39,15 @@
         <!-- raiz: todos los elementos van dentro para que pan/zoom sea un solo transform -->
         <g id="raiz"></g>
       </svg>
+      <input id="etiqueta-editor" type="text" hidden autocomplete="off" spellcheck="false">
     </main>
 
     <aside id="propiedades">
-      <!-- panel de propiedades - Fase 2 -->
+      <!-- construido dinamicamente por propiedades.js -->
     </aside>
 
   </div>
+
   <!-- modal guardar como -->
   <div id="modal-guardar-como" class="modal-fondo" hidden>
     <div class="modal-caja" role="dialog" aria-modal="true" aria-labelledby="modal-titulo">

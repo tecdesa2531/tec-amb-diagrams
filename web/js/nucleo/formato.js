@@ -22,6 +22,7 @@ export function serializar(doc) {
         version: doc.version,
         documento: { ...doc.documento },
         lienzo: { ...doc.lienzo },
+        iconos: { ...(doc.iconos ?? {}) },
         elementos: doc.elementos.map(e => ({ ...e })),
         conectores: doc.conectores.map(c => ({ ...c })),
     }, null, 2);

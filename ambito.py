@@ -1,6 +1,7 @@
 import argparse
 import json
 import pathlib
+import re
 import shutil
 import socket
 import threading
@@ -59,6 +60,52 @@ def nombre_valido(nombre):
     return bool(nombre) and all(c.isalnum() or c in "-_" for c in nombre)
 
 
+def _slug(texto):
+    return re.sub(r'[^a-z0-9]+', '-', texto.lower()).strip('-')
+
+
+def _nombre_legible(stem):
+    s = re.sub(r'_\d+(_(Light|Dark))?$', '', stem)
+    s = re.sub(r'^(Arch|Res|Category)_', '', s)
+    s = re.sub(r'^Arch-Category-', '', s)
+    return s.replace('-', ' ').replace('_', ' ').strip()
+
+
+def _categoria_legible(nombre_carpeta):
+    c = re.sub(r'^(Arch|Res)_', '', nombre_carpeta)
+    return re.sub(r'([a-z])([A-Z])', r'\1 \2', c).strip()
+
+
+def _parsear_icono(carpeta_raiz, ruta):
+    nombre = ruta.name
+    if nombre.startswith('Arch_'):
+        tipo = 'servicio'
+    elif nombre.startswith('Res_'):
+        tipo = 'recurso'
+    elif nombre.startswith('Category') or nombre.startswith('Arch-Category'):
+        tipo = 'categoria'
+    else:
+        return None
+    try:
+        partes = ruta.parent.relative_to(carpeta_raiz).parts
+    except ValueError:
+        return None
+    categoria = _categoria_legible(partes[0]) if partes else "General"
+    nombre_l = _nombre_legible(ruta.stem)
+    id_icono = tipo[0] + '-' + _slug(nombre_l)
+    ruta_api = '/iconos/' + '/'.join(ruta.relative_to(carpeta_raiz).parts)
+    return {"id": id_icono, "nombre": nombre_l, "categoria": categoria, "tipo": tipo, "ruta": ruta_api}
+
+
+def _es_mejor_variante(nombre_nuevo, nombre_viejo):
+    def puntuacion(n):
+        if '_64' in n: return 3
+        if '_48' in n and 'Light' not in n and 'Dark' not in n: return 2
+        if '_48' in n: return 1
+        return 0
+    return puntuacion(nombre_nuevo) > puntuacion(nombre_viejo)
+
+
 class ManejadorHTTP(BaseHTTPRequestHandler):
     carpeta_diagramas = None
     carpeta_iconos    = None
@@ -74,6 +121,10 @@ class ManejadorHTTP(BaseHTTPRequestHandler):
             self._listar_diagramas()
         elif ruta.startswith("/api/diagramas/"):
             self._leer_diagrama(ruta[len("/api/diagramas/"):])
+        elif ruta == "/api/iconos":
+            self._listar_iconos()
+        elif ruta.startswith("/iconos/"):
+            self._servir_icono(ruta[len("/iconos/"):])
         elif ruta.startswith("/web/"):
             self._servir_estatico(ruta[len("/web/"):])
         else:
@@ -125,6 +176,30 @@ class ManejadorHTTP(BaseHTTPRequestHandler):
             shutil.copy2(ruta, ruta.with_suffix(".ambito.bak"))
         ruta.write_text(json.dumps(obj, indent=2, ensure_ascii=False), encoding="utf-8")
         self._responder(200, b'{"ok": true}', "application/json")
+
+    def _listar_iconos(self):
+        carpeta = self.carpeta_iconos
+        if not carpeta.is_dir():
+            self._responder(200, b"[]", "application/json; charset=utf-8")
+            return
+        vistos = {}
+        for ruta in sorted(carpeta.rglob("*.svg")):
+            entrada = _parsear_icono(carpeta, ruta)
+            if entrada is None:
+                continue
+            clave = entrada["id"]
+            if clave not in vistos or _es_mejor_variante(ruta.name, vistos[clave]["_nombre"]):
+                vistos[clave] = {**entrada, "_nombre": ruta.name}
+        iconos = [{k: v for k, v in e.items() if k != "_nombre"} for e in vistos.values()]
+        cuerpo = json.dumps(iconos, ensure_ascii=False).encode("utf-8")
+        self._responder(200, cuerpo, "application/json; charset=utf-8")
+
+    def _servir_icono(self, relativa):
+        ruta = ruta_segura(self.carpeta_iconos, relativa)
+        if ruta is None or not ruta.is_file():
+            self._responder(404, b'{"error": "no encontrado"}', "application/json")
+            return
+        self._servir_archivo(ruta)
 
     def _servir_estatico(self, relativa):
         ruta = ruta_segura(RAIZ / "web", relativa)

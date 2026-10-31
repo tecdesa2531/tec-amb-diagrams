@@ -8,22 +8,31 @@ export function crearDocumento(titulo = "Sin titulo") {
         version: 1,
         documento: { titulo, creado: ahora, modificado: ahora },
         lienzo: { cuadricula: 10 },
+        iconos: {},
         elementos: [],
         conectores: [],
     };
 }
 
 export function crearElemento(tipo, x, y, opciones = {}) {
+    const esIcono = tipo === "icono";
     return {
         id: crypto.randomUUID(),
         tipo,
         x,
         y,
-        ancho: opciones.ancho ?? 120,
-        alto: opciones.alto ?? 60,
+        ancho: opciones.ancho ?? (esIcono ? 48 : 120),
+        alto: opciones.alto ?? (esIcono ? 48 : 60),
         etiqueta: opciones.etiqueta ?? "",
+        padre: opciones.padre ?? null,
+        ...(esIcono ? { icono: opciones.icono ?? null } : {}),
         estilo: opciones.estilo ?? {},
     };
+}
+
+export function registrarIcono(doc, id, datos) {
+    if (doc.iconos[id]) return doc;
+    return { ...doc, iconos: { ...doc.iconos, [id]: datos } };
 }
 
 export function crearConector(origenId, destinoId, opciones = {}) {

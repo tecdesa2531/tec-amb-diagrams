@@ -3,6 +3,7 @@
 import { TIPOS_GRUPO } from "../nucleo/modelo.js";
 import { contenedorEn, ordenDibujo } from "../nucleo/grupos.js";
 import { puntosConexion, calcularRuta, puntosAPath, OPUESTO, ladoAutoOrigen, trazarOrtogonal } from "../nucleo/enrutado.js";
+import { calcularGuias, aplicarSnap, detectarEspaciadoIgual } from "../nucleo/guias.js";
 
 const NS = "http://www.w3.org/2000/svg";
 const ESCALA_MIN = 0.25;
@@ -20,9 +21,10 @@ let cb = {};
 let elementosActuales = [], conectoresActuales = [], iconosActuales = {};
 let overlayEl = null, bandaEl = null, highlightEl = null;
 let conectoresEl = null, puntosConexionEl = null, previewConectorEl = null;
+let guiasEl = null;
 let arrastre = null;
 let editandoId = null;
-let espacioPresionado = false;
+let espacioPresionado = false, altPresionado = false;
 let grupoHighlightId = null;
 
 // --- SVG helpers ---
@@ -383,6 +385,53 @@ function grupoContenedorParaMover(dx, dy) {
     return contenedorEn(elementosActuales, bb.x, bb.y, bb.ancho, bb.alto, new Set(seleccionIds));
 }
 
+// --- Guias visuales de alineacion ---
+function dibujarGuiasActivas(guiasActivas) {
+    guiasEl.innerHTML = "";
+    const r = svgEl.getBoundingClientRect();
+    for (const g of guiasActivas) {
+        if (g.eje === "x") {
+            const sx = g.valor * escala + tx;
+            guiasEl.appendChild(nodo("line", { x1: sx, y1: 0, x2: sx, y2: r.height, stroke: "#E0119D", "stroke-width": 1, "pointer-events": "none" }));
+        } else {
+            const sy = g.valor * escala + ty;
+            guiasEl.appendChild(nodo("line", { x1: 0, y1: sy, x2: r.width, y2: sy, stroke: "#E0119D", "stroke-width": 1, "pointer-events": "none" }));
+        }
+    }
+}
+
+function dibujarEspaciadoIgual(grupos, elementos) {
+    for (const grupo of grupos) {
+        const sorted = grupo.ids.map(id => elementos.find(e => e.id === id)).filter(Boolean);
+        for (let i = 0; i + 1 < sorted.length; i++) {
+            const a = sorted[i], b = sorted[i + 1];
+            if (grupo.eje === "x") {
+                const x1 = (a.x + a.ancho) * escala + tx;
+                const x2 = b.x * escala + tx;
+                const y  = (a.y + a.alto / 2) * escala + ty;
+                const xm = (x1 + x2) / 2;
+                guiasEl.appendChild(nodo("line", { x1, y1: y, x2, y2: y, stroke: "#E0119D", "stroke-width": 1, "stroke-dasharray": "4 2", "pointer-events": "none" }));
+                const txt = document.createElementNS(NS, "text");
+                Object.entries({ x: xm, y: y - 4, "text-anchor": "middle", "font-size": "10", fill: "#E0119D", "pointer-events": "none", "font-family": "system-ui, sans-serif" }).forEach(([k, v]) => txt.setAttribute(k, v));
+                txt.textContent = grupo.distancia;
+                guiasEl.appendChild(txt);
+            } else {
+                const y1 = (a.y + a.alto) * escala + ty;
+                const y2 = b.y * escala + ty;
+                const x  = (a.x + a.ancho / 2) * escala + tx;
+                const ym = (y1 + y2) / 2;
+                guiasEl.appendChild(nodo("line", { x1: x, y1, x2: x, y2, stroke: "#E0119D", "stroke-width": 1, "stroke-dasharray": "4 2", "pointer-events": "none" }));
+                const txt = document.createElementNS(NS, "text");
+                Object.entries({ x: x + 4, y: ym, "dominant-baseline": "middle", "font-size": "10", fill: "#E0119D", "pointer-events": "none", "font-family": "system-ui, sans-serif" }).forEach(([k, v]) => txt.setAttribute(k, v));
+                txt.textContent = grupo.distancia;
+                guiasEl.appendChild(txt);
+            }
+        }
+    }
+}
+
+function limpiarGuias() { if (guiasEl) guiasEl.innerHTML = ""; }
+
 function dibujarPreviewConector(origenId, ladoOrigen, x2, y2) {
     const elO = elementosActuales.find(e => e.id === origenId);
     if (!elO) { previewConectorEl.innerHTML = ""; return; }
@@ -440,13 +489,29 @@ function onPointerMove(e) {
         const dy = (e.clientY - arrastre.sy) / escala;
         if (Math.abs(dx) > 2 || Math.abs(dy) > 2) arrastre.movido = true;
         if (!arrastre.movido) return;
+
+        // Calcular snap sobre la BB de los elementos seleccionados
+        const selEls  = elementosActuales.filter(el => seleccionIds.has(el.id));
+        const otrosEls = elementosActuales.filter(el => !seleccionIds.has(el.id));
+        const bb  = boundingBox(selEls);
+        const bbMov = { id: "__sel__", x: bb.x + dx, y: bb.y + dy, ancho: bb.ancho, alto: bb.alto };
+        const guias = calcularGuias(bbMov, otrosEls);
+        const { x: sx, y: sy, guiasActivas } = aplicarSnap(bbMov.x, bbMov.y, bb.ancho, bb.alto, guias, escala, altPresionado);
+        const dxs = sx - bb.x;
+        const dys = sy - bb.y;
+        arrastre.dxSnap = dxs;
+        arrastre.dySnap = dys;
+
         for (const id of seleccionIds) {
             const nodoEl = raizEl.querySelector(`[data-id="${id}"]`);
-            if (nodoEl) nodoEl.setAttribute("transform", `translate(${Math.round(dx)},${Math.round(dy)})`);
+            if (nodoEl) nodoEl.setAttribute("transform", `translate(${Math.round(dxs)},${Math.round(dys)})`);
         }
-        const tempEls = elementosActuales.map(el => seleccionIds.has(el.id) ? { ...el, x: arrastre.posIni[el.id].x + dx, y: arrastre.posIni[el.id].y + dy } : el);
+        const tempEls = elementosActuales.map(el => seleccionIds.has(el.id) ? { ...el, x: arrastre.posIni[el.id].x + dxs, y: arrastre.posIni[el.id].y + dys } : el);
         dibujarSeleccionDe(tempEls.filter(el => seleccionIds.has(el.id)));
-        mostrarHighlight(grupoContenedorParaMover(dx, dy));
+        mostrarHighlight(grupoContenedorParaMover(dxs, dys));
+
+        dibujarGuiasActivas(guiasActivas);
+        dibujarEspaciadoIgual(detectarEspaciadoIgual(tempEls), tempEls);
         return;
     }
     if (arrastre.tipo === "resize") {
@@ -490,10 +555,11 @@ function onPointerUp(e) {
         return;
     }
     if (arrastre.tipo === "mover" && arrastre.movido) {
-        const dx = (e.clientX - arrastre.sx) / escala;
-        const dy = (e.clientY - arrastre.sy) / escala;
-        const movidos = elementosActuales.filter(el => seleccionIds.has(el.id)).map(el => ({ id: el.id, x: Math.round(arrastre.posIni[el.id].x + dx), y: Math.round(arrastre.posIni[el.id].y + dy) }));
+        const dxs = arrastre.dxSnap ?? (e.clientX - arrastre.sx) / escala;
+        const dys = arrastre.dySnap ?? (e.clientY - arrastre.sy) / escala;
+        const movidos = elementosActuales.filter(el => seleccionIds.has(el.id)).map(el => ({ id: el.id, x: Math.round(arrastre.posIni[el.id].x + dxs), y: Math.round(arrastre.posIni[el.id].y + dys) }));
         ocultarHighlight();
+        limpiarGuias();
         cb.onMover?.(movidos);
     }
     if (arrastre.tipo === "resize") {
@@ -505,6 +571,7 @@ function onPointerUp(e) {
         bandaEl.setAttribute("display", "none");
         cb.onSeleccion?.(new Set(seleccionIds));
     }
+    limpiarGuias();
     for (const id of seleccionIds) {
         raizEl.querySelector(`[data-id="${id}"]`)?.removeAttribute("transform");
     }
@@ -637,6 +704,8 @@ export function iniciar(svg, raiz, cont, editor, callbacks) {
 
     bandaEl = nodo("rect", { id: "banda-sel", fill: "rgba(9,114,211,0.08)", stroke: "#0972D3", "stroke-width": "1", display: "none" });
     svgEl.appendChild(bandaEl);
+    guiasEl = nodo("g", { id: "guias-visual", "pointer-events": "none" });
+    svgEl.appendChild(guiasEl);
 
     svgEl.addEventListener("wheel", onRueda, { passive: false });
     svgEl.addEventListener("pointerdown", onPointerDown);
@@ -655,10 +724,12 @@ export function iniciar(svg, raiz, cont, editor, callbacks) {
     });
 
     document.addEventListener("keydown", e => {
+        if (e.key === "Alt") { altPresionado = true; return; }
         if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
         if (e.key === " ") { e.preventDefault(); espacioPresionado = true; svgEl.style.cursor = "grab"; }
     });
     document.addEventListener("keyup", e => {
+        if (e.key === "Alt") { altPresionado = false; return; }
         if (e.key === " ") { espacioPresionado = false; if (!arrastre) svgEl.style.cursor = ""; }
     });
 }

@@ -1,4 +1,5 @@
 import { crearDocumento, crearElemento, crearGrupo, crearConector, actualizarElemento, actualizarConector, eliminarElemento, eliminarConector, agregarElemento, agregarConector, registrarIcono } from "./nucleo/modelo.js";
+import { alinear, distribuir, igualarTamano } from "./nucleo/guias.js";
 import { serializar, deserializar } from "./nucleo/formato.js";
 import { crearHistorial, empujar, deshacer as deshacerH, rehacer as rehacerH } from "./nucleo/historial.js";
 import { descendientes, contenedorEn } from "./nucleo/grupos.js";
@@ -268,6 +269,18 @@ function onPropsCambio(id, cambios) {
     accion(doc => actualizarElemento(doc, id, cambios));
 }
 
+function onAlinear(ids, tipo) {
+    accion(doc => alinear(ids, doc.elementos, tipo).reduce((d, c) => actualizarElemento(d, c.id, c), doc));
+}
+
+function onDistribuir(ids, eje) {
+    accion(doc => distribuir(ids, doc.elementos, eje).reduce((d, c) => actualizarElemento(d, c.id, c), doc));
+}
+
+function onIgualarTamano(ids, referencia) {
+    accion(doc => igualarTamano(ids, doc.elementos, referencia).reduce((d, c) => actualizarElemento(d, c.id, c), doc));
+}
+
 // --- Inicializacion ---
 async function iniciar() {
     let itemsIconos = [];
@@ -285,7 +298,7 @@ async function iniciar() {
     );
 
     iniciarPaleta(document.getElementById("paleta"), itemsIconos);
-    iniciarProps(document.getElementById("propiedades"), { onChange: onPropsCambio });
+    iniciarProps(document.getElementById("propiedades"), { onChange: onPropsCambio, onAlinear, onDistribuir, onIgualarTamano });
 
     iniciarBarra({
         onZoomMas:   () => zoomEn(1.25),

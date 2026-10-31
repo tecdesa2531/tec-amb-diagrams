@@ -285,6 +285,39 @@ body {
 
 .props-input:focus { border-color: var(--color-seleccion); }
 
+.props-seccion {
+  font-size: var(--tam-etiqueta);
+  font-weight: 600;
+  color: var(--color-texto-sec);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin: 10px 0 4px;
+}
+
+.props-botones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
+.props-btn {
+  font-family: var(--fuente);
+  font-size: var(--tam-etiqueta);
+  padding: 3px 8px;
+  background: #fff;
+  color: var(--color-texto);
+  border: 1px solid var(--color-borde);
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.props-btn:hover {
+  background: var(--color-fondo-panel);
+  border-color: var(--color-seleccion);
+}
+
 /* === Modal guardar como === */
 .modal-fondo {
   position: fixed;

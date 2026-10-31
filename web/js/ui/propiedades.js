@@ -51,6 +51,63 @@ function mostrarElemento(panel, el) {
     }
 }
 
+function seccion(texto) {
+    const p = document.createElement("p");
+    p.className = "props-seccion";
+    p.textContent = texto;
+    return p;
+}
+
+function boton(etiqueta, onClick) {
+    const btn = document.createElement("button");
+    btn.className = "props-btn";
+    btn.textContent = etiqueta;
+    btn.addEventListener("click", onClick);
+    return btn;
+}
+
+function grupoBotones(botones) {
+    const div = document.createElement("div");
+    div.className = "props-botones";
+    for (const btn of botones) div.appendChild(btn);
+    return div;
+}
+
+function mostrarMultiple(panel, ids) {
+    panel.innerHTML = "";
+    idActual = null;
+
+    const msg = document.createElement("p");
+    msg.className = "props-vacio";
+    msg.textContent = ids.length + " elementos";
+    panel.appendChild(msg);
+
+    panel.appendChild(seccion("Alinear"));
+    panel.appendChild(grupoBotones([
+        boton("Izq",    () => cb.onAlinear?.(ids, "left")),
+        boton("Der",    () => cb.onAlinear?.(ids, "right")),
+        boton("Top",    () => cb.onAlinear?.(ids, "top")),
+        boton("Bot",    () => cb.onAlinear?.(ids, "bottom")),
+        boton("Cent H", () => cb.onAlinear?.(ids, "centerH")),
+        boton("Cent V", () => cb.onAlinear?.(ids, "centerV")),
+    ]));
+
+    if (ids.length >= 3) {
+        panel.appendChild(seccion("Distribuir"));
+        panel.appendChild(grupoBotones([
+            boton("Horizontal", () => cb.onDistribuir?.(ids, "x")),
+            boton("Vertical",   () => cb.onDistribuir?.(ids, "y")),
+        ]));
+    }
+
+    panel.appendChild(seccion("Igualar tamano"));
+    panel.appendChild(grupoBotones([
+        boton("Ancho", () => cb.onIgualarTamano?.(ids, "ancho")),
+        boton("Alto",  () => cb.onIgualarTamano?.(ids, "alto")),
+        boton("Ambos", () => cb.onIgualarTamano?.(ids, "ambos")),
+    ]));
+}
+
 export function iniciar(panel, callbacks) {
     cb = callbacks ?? {};
     mostrarVacio(panel);
@@ -62,5 +119,6 @@ export function actualizar(panel, elementos, seleccionIds) {
         const el = elementos.find(e => e.id === ids[0]);
         if (el) { mostrarElemento(panel, el); return; }
     }
+    if (ids.length >= 2) { mostrarMultiple(panel, ids); return; }
     mostrarVacio(panel);
 }

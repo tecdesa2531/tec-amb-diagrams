@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ambito</title>
+  <link rel="stylesheet" href="/web/css/estilos.css">
+</head>
+<body>
+  <div id="app">
+
+    <header id="barra">
+      <span id="nombre-app">Ambito</span>
+      <span id="nombre-archivo">Sin titulo</span>
+    </header>
+
+    <aside id="paleta">
+      <!-- paleta de iconos - Fase 2 -->
+    </aside>
+
+    <main id="lienzo-contenedor">
+      <svg id="lienzo" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <pattern id="patron-cuadricula" width="10" height="10" patternUnits="userSpaceOnUse">
+            <circle cx="0.5" cy="0.5" r="0.5" fill="#E5E7EB"/>
+          </pattern>
+        </defs>
+        <rect id="fondo-cuadricula" width="100%" height="100%" fill="url(#patron-cuadricula)"/>
+        <!-- elementos del diagrama - Fase 2 -->
+      </svg>
+    </main>
+
+    <aside id="propiedades">
+      <!-- panel de propiedades - Fase 2 -->
+    </aside>
+
+  </div>
+  <script type="module" src="/web/js/app.js"></script>
+</body>
+</html>

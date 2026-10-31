@@ -1,0 +1,14 @@
+# Paquete de iconos AWS (se descarga aparte en cada equipo)
+iconos/
+
+# Diagramas de trabajo y respaldos
+diagramas/
+
+# Python
+__pycache__/
+*.pyc
+
+# Sistema
+.DS_Store
+Thumbs.db
+__MACOSX/

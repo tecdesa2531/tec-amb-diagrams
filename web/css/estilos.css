@@ -1,0 +1,101 @@
+/* === Tokens del sistema visual corporativo === */
+:root {
+  --fuente: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  --color-texto:        #232F3E;
+  --color-texto-sec:    #545B64;
+  --color-fondo-panel:  #F7F8FA;
+  --color-borde:        #E5E7EB;
+  --color-seleccion:    #0972D3;
+  --color-guia:         #E0119D;
+
+  --tam-titulo:    20px;
+  --tam-subtitulo: 16px;
+  --tam-normal:    13px;
+  --tam-etiqueta:  12px;
+  --tam-flecha:    11px;
+  --tam-nota:      11px;
+
+  --grosor-fino:   1px;
+  --grosor-normal: 1.5px;
+  --grosor-grueso: 2px;
+
+  --barra-alto:           44px;
+  --paleta-ancho:         220px;
+  --propiedades-ancho:    240px;
+}
+
+/* === Reset minimo === */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--fuente);
+  font-size: var(--tam-normal);
+  color: var(--color-texto);
+  background: #fff;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* === Layout principal === */
+#app {
+  display: grid;
+  grid-template-areas:
+    "barra       barra     barra"
+    "paleta      lienzo    propiedades";
+  grid-template-rows:    var(--barra-alto) 1fr;
+  grid-template-columns: var(--paleta-ancho) 1fr var(--propiedades-ancho);
+  height: 100vh;
+}
+
+/* === Barra superior === */
+#barra {
+  grid-area: barra;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+  background: var(--color-fondo-panel);
+  border-bottom: 1px solid var(--color-borde);
+}
+
+#nombre-app {
+  font-weight: 600;
+}
+
+#nombre-archivo {
+  color: var(--color-texto-sec);
+}
+
+/* === Paneles laterales === */
+#paleta {
+  grid-area: paleta;
+  background: var(--color-fondo-panel);
+  border-right: 1px solid var(--color-borde);
+  overflow-y: auto;
+}
+
+#propiedades {
+  grid-area: propiedades;
+  background: var(--color-fondo-panel);
+  border-left: 1px solid var(--color-borde);
+  overflow-y: auto;
+}
+
+/* === Lienzo === */
+#lienzo-contenedor {
+  grid-area: lienzo;
+  position: relative;
+  overflow: hidden;
+  background: #fff;
+}
+
+#lienzo {
+  width: 100%;
+  height: 100%;
+  display: block;
+}

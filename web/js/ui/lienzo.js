@@ -1,21 +1,25 @@
-// Lienzo SVG interactivo: pan/zoom, seleccion, mover, redimensionar, editar etiqueta.
+// Lienzo SVG interactivo: pan/zoom, seleccion, mover, redimensionar, editar etiqueta, conectores.
 
 import { TIPOS_GRUPO } from "../nucleo/modelo.js";
 import { contenedorEn, ordenDibujo } from "../nucleo/grupos.js";
+import { puntosConexion, calcularRuta, puntosAPath, OPUESTO, ladoAutoOrigen, trazarOrtogonal } from "../nucleo/enrutado.js";
 
 const NS = "http://www.w3.org/2000/svg";
 const ESCALA_MIN = 0.25;
 const ESCALA_MAX = 4.0;
 const MARGEN = 40;
-const H_HANDLE = 8; // pixels en pantalla
+const H_HANDLE = 8;
+const R_CONEXION = 10; // radio de captura para puntos de conexion en canvas units
 
 // --- Estado del modulo ---
 let svgEl, raizEl, contEl, editorEl;
 let tx = 0, ty = 0, escala = 1.0;
 let seleccionIds = new Set();
+let seleccionConectorId = null;
 let cb = {};
-let elementosActuales = [], iconosActuales = {};
+let elementosActuales = [], conectoresActuales = [], iconosActuales = {};
 let overlayEl = null, bandaEl = null, highlightEl = null;
+let conectoresEl = null, puntosConexionEl = null, previewConectorEl = null;
 let arrastre = null;
 let editandoId = null;
 let espacioPresionado = false;
@@ -58,17 +62,52 @@ function mostrarHighlight(grupoId) {
     highlightEl.appendChild(nodo("rect", {
         x: g.x - m, y: g.y - m,
         width: g.ancho + m * 2, height: g.alto + m * 2,
-        fill: def.borde + "20",
-        stroke: def.borde,
-        "stroke-width": 3 / escala,
-        rx: 6 / escala,
+        fill: def.borde + "20", stroke: def.borde,
+        "stroke-width": 3 / escala, rx: 6 / escala,
         "pointer-events": "none",
     }));
 }
 
-function ocultarHighlight() {
-    grupoHighlightId = null;
-    highlightEl.innerHTML = "";
+function ocultarHighlight() { grupoHighlightId = null; highlightEl.innerHTML = ""; }
+
+// --- Puntos de conexion ---
+function dibujarPuntosConexion(el) {
+    puntosConexionEl.innerHTML = "";
+    if (!el) return;
+    const pts = puntosConexion(el);
+    const r = 5 / escala;
+    const sw = 1.5 / escala;
+    for (const [lado, pt] of Object.entries(pts)) {
+        puntosConexionEl.appendChild(nodo("circle", {
+            cx: pt.x, cy: pt.y, r,
+            fill: "#0972D3", stroke: "#fff", "stroke-width": sw,
+            "data-conexion": lado, "data-elemento": el.id,
+            cursor: "crosshair",
+        }));
+    }
+}
+
+function puntoConexionBajoCanvas(x, y, excluirId) {
+    const r = R_CONEXION / escala;
+    for (const el of elementosActuales) {
+        if (el.id === excluirId) continue;
+        for (const [lado, pt] of Object.entries(puntosConexion(el))) {
+            if (Math.abs(pt.x - x) < r && Math.abs(pt.y - y) < r) return { elementoId: el.id, lado };
+        }
+    }
+    return null;
+}
+
+function elementoBajoPointerExcluido(x, y, excluirId) {
+    let mejor = null, mejorArea = Infinity;
+    for (const el of elementosActuales) {
+        if (el.id === excluirId) continue;
+        if (x >= el.x && y >= el.y && x <= el.x + el.ancho && y <= el.y + el.alto) {
+            const area = el.ancho * el.alto;
+            if (area < mejorArea) { mejorArea = area; mejor = el; }
+        }
+    }
+    return mejor;
 }
 
 // --- Renderizado de elementos ---
@@ -88,14 +127,9 @@ function nodoIcono(el, iconos) {
     if (!datos) return nodoCaja(el);
     const g = nodo("g", { "data-id": el.id, "data-tipo": "icono", cursor: "move" });
     let href;
-    if (datos.svg) {
-        href = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(datos.svg)));
-    } else if (datos.ruta) {
-        href = datos.ruta;
-    }
-    if (href) {
-        g.appendChild(nodo("image", { x: el.x, y: el.y, width: el.ancho, height: el.alto, href }));
-    }
+    if (datos.svg) href = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(datos.svg)));
+    else if (datos.ruta) href = datos.ruta;
+    if (href) g.appendChild(nodo("image", { x: el.x, y: el.y, width: el.ancho, height: el.alto, href }));
     if (el.etiqueta) {
         const t = nodo("text", { x: el.x + el.ancho / 2, y: el.y + el.alto + 14, "text-anchor": "middle", "font-size": "12", "font-family": "system-ui, sans-serif", fill: "#232F3E" });
         t.textContent = el.etiqueta;
@@ -108,23 +142,9 @@ function nodoGrupo(el) {
     const def = TIPOS_GRUPO[el.subtipo] ?? TIPOS_GRUPO["generico"];
     const g = nodo("g", { "data-id": el.id, "data-tipo": "grupo", cursor: "move" });
     const dasharray = def.linea === "discontinua" ? "8 4" : "none";
-    g.appendChild(nodo("rect", {
-        x: el.x, y: el.y, width: el.ancho, height: el.alto,
-        fill: def.relleno ?? "none",
-        stroke: def.borde,
-        "stroke-width": "2",
-        rx: "4",
-        "stroke-dasharray": dasharray,
-    }));
-    // Etiqueta en la esquina superior izquierda, dentro del borde
-    const etiq = el.etiqueta || def.nombre;
-    const t = nodo("text", {
-        x: el.x + 8, y: el.y + 16,
-        "font-size": "11", "font-family": "system-ui, sans-serif",
-        fill: def.borde, "font-weight": "600",
-        "pointer-events": "none",
-    });
-    t.textContent = etiq;
+    g.appendChild(nodo("rect", { x: el.x, y: el.y, width: el.ancho, height: el.alto, fill: def.relleno ?? "none", stroke: def.borde, "stroke-width": "2", rx: "4", "stroke-dasharray": dasharray }));
+    const t = nodo("text", { x: el.x + 8, y: el.y + 16, "font-size": "11", "font-family": "system-ui, sans-serif", fill: def.borde, "font-weight": "600", "pointer-events": "none" });
+    t.textContent = el.etiqueta || def.nombre;
     g.appendChild(t);
     return g;
 }
@@ -135,7 +155,33 @@ function nodoElemento(el, iconos) {
     return nodoCaja(el);
 }
 
-// --- Seleccion visual ---
+// --- Renderizado de conectores ---
+function nodoConector(con, elementos, seleccionado) {
+    const puntos = calcularRuta(con, elementos);
+    if (puntos.length < 2) return null;
+    const d = puntosAPath(puntos);
+    const g = nodo("g", { "data-conector-id": con.id, cursor: "pointer" });
+    const color = seleccionado ? "#0972D3" : "#545B64";
+    const dasharray = con.estilo?.linea === "discontinua" ? `${6/escala} ${3/escala}` : "none";
+    // Hitbox invisible para facilitar clic
+    g.appendChild(nodo("path", { d, fill: "none", stroke: "transparent", "stroke-width": 12 / escala }));
+    g.appendChild(nodo("path", {
+        d, fill: "none", stroke: color,
+        "stroke-width": (seleccionado ? 2 : 1.5) / escala,
+        "stroke-dasharray": dasharray,
+        "marker-end": "url(#amb-flecha-fin)",
+        "pointer-events": "none",
+    }));
+    if (con.etiqueta) {
+        const mid = puntos[Math.floor(puntos.length / 2)];
+        const t = nodo("text", { x: mid.x, y: mid.y - 6 / escala, "text-anchor": "middle", "font-size": 11 / escala, "font-family": "system-ui, sans-serif", fill: "#232F3E", "pointer-events": "none" });
+        t.textContent = con.etiqueta;
+        g.appendChild(t);
+    }
+    return g;
+}
+
+// --- Seleccion visual de elementos ---
 function boundingBox(elementos) {
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     for (const e of elementos) {
@@ -147,14 +193,14 @@ function boundingBox(elementos) {
 
 function posHandles(bb, h) {
     return [
-        { n: "nw", x: bb.x,              y: bb.y,             cur: "nw-resize" },
-        { n: "n",  x: bb.x+bb.ancho/2,   y: bb.y,             cur: "n-resize"  },
-        { n: "ne", x: bb.x+bb.ancho,      y: bb.y,             cur: "ne-resize" },
-        { n: "e",  x: bb.x+bb.ancho,      y: bb.y+bb.alto/2,  cur: "e-resize"  },
-        { n: "se", x: bb.x+bb.ancho,      y: bb.y+bb.alto,    cur: "se-resize" },
-        { n: "s",  x: bb.x+bb.ancho/2,   y: bb.y+bb.alto,    cur: "s-resize"  },
-        { n: "sw", x: bb.x,              y: bb.y+bb.alto,    cur: "sw-resize" },
-        { n: "w",  x: bb.x,              y: bb.y+bb.alto/2,  cur: "w-resize"  },
+        { n: "nw", x: bb.x,            y: bb.y,            cur: "nw-resize" },
+        { n: "n",  x: bb.x+bb.ancho/2, y: bb.y,            cur: "n-resize"  },
+        { n: "ne", x: bb.x+bb.ancho,   y: bb.y,            cur: "ne-resize" },
+        { n: "e",  x: bb.x+bb.ancho,   y: bb.y+bb.alto/2,  cur: "e-resize"  },
+        { n: "se", x: bb.x+bb.ancho,   y: bb.y+bb.alto,    cur: "se-resize" },
+        { n: "s",  x: bb.x+bb.ancho/2, y: bb.y+bb.alto,    cur: "s-resize"  },
+        { n: "sw", x: bb.x,            y: bb.y+bb.alto,    cur: "sw-resize" },
+        { n: "w",  x: bb.x,            y: bb.y+bb.alto/2,  cur: "w-resize"  },
     ];
 }
 
@@ -177,12 +223,18 @@ function dibujarSeleccion() {
 }
 
 // --- API de renderizado ---
-export function renderizar(elementos, iconos) {
+export function renderizar(elementos, conectores, iconos) {
     elementosActuales = elementos;
+    conectoresActuales = conectores ?? [];
     iconosActuales = iconos ?? {};
     Array.from(raizEl.children).filter(n => n.dataset?.id).forEach(n => n.remove());
     for (const el of ordenDibujo(elementos)) {
-        raizEl.insertBefore(nodoElemento(el, iconosActuales), overlayEl);
+        raizEl.insertBefore(nodoElemento(el, iconosActuales), conectoresEl);
+    }
+    conectoresEl.innerHTML = "";
+    for (const con of conectoresActuales) {
+        const n = nodoConector(con, elementos, con.id === seleccionConectorId);
+        if (n) conectoresEl.appendChild(n);
     }
     dibujarSeleccion();
 }
@@ -210,13 +262,10 @@ export function zoomEn(factor) {
     aplicarTransform();
 }
 
-export function setSeleccion(ids) {
-    seleccionIds = new Set(ids);
-    dibujarSeleccion();
-}
-
-export function limpiarSeleccion() { setSeleccion([]); }
+export function setSeleccion(ids) { seleccionIds = new Set(ids); dibujarSeleccion(); }
+export function limpiarSeleccion() { seleccionIds = new Set(); seleccionConectorId = null; dibujarSeleccion(); }
 export function obtenerSeleccion() { return new Set(seleccionIds); }
+export function obtenerSeleccionConector() { return seleccionConectorId; }
 export function getTransform() { return { tx, ty, escala }; }
 
 // --- Eventos de rueda ---
@@ -246,6 +295,30 @@ function onPointerDown(e) {
         svgEl.style.cursor = "grabbing";
         return;
     }
+    // Punto de conexion -> crear conector
+    const conxLado = e.target.dataset?.conexion;
+    const conxElId = e.target.dataset?.elemento;
+    if (conxLado && conxElId) {
+        puntosConexionEl.innerHTML = "";
+        const { x, y } = screenACanvas(e.clientX, e.clientY);
+        arrastre = { tipo: "conector-nuevo", origenId: conxElId, ladoOrigen: conxLado, x, y };
+        svgEl.setPointerCapture(e.pointerId);
+        svgEl.style.cursor = "crosshair";
+        return;
+    }
+    // Conector -> seleccionar
+    const conectorId = e.target.closest("[data-conector-id]")?.dataset?.conectorId;
+    if (conectorId) {
+        seleccionIds = new Set();
+        seleccionConectorId = conectorId;
+        cb.onSeleccion?.(new Set());
+        cb.onSeleccionConector?.(conectorId);
+        renderizarConectores();
+        dibujarSeleccion();
+        arrastre = null;
+        return;
+    }
+    // Handle de resize
     const handle = e.target.dataset?.handle;
     if (handle && seleccionIds.size === 1) {
         const [id] = [...seleccionIds];
@@ -255,9 +328,11 @@ function onPointerDown(e) {
         svgEl.setPointerCapture(e.pointerId);
         return;
     }
+    // Elemento -> mover / seleccionar
     const nodoEl = e.target.closest("[data-id]");
     if (nodoEl) {
         const id = nodoEl.dataset.id;
+        seleccionConectorId = null;
         if (!e.shiftKey && !seleccionIds.has(id)) {
             seleccionIds = new Set([id]);
         } else if (e.shiftKey) {
@@ -271,10 +346,21 @@ function onPointerDown(e) {
         svgEl.setPointerCapture(e.pointerId);
         return;
     }
-    if (!e.shiftKey) { seleccionIds = new Set(); cb.onSeleccion?.(new Set()); dibujarSeleccion(); }
+    seleccionIds = new Set(); seleccionConectorId = null;
+    cb.onSeleccion?.(new Set());
+    renderizarConectores();
+    dibujarSeleccion();
     const { x, y } = screenACanvas(e.clientX, e.clientY);
     arrastre = { tipo: "banda", sx: e.clientX, sy: e.clientY, cx: x, cy: y };
     svgEl.setPointerCapture(e.pointerId);
+}
+
+function renderizarConectores() {
+    conectoresEl.innerHTML = "";
+    for (const con of conectoresActuales) {
+        const n = nodoConector(con, elementosActuales, con.id === seleccionConectorId);
+        if (n) conectoresEl.appendChild(n);
+    }
 }
 
 function calcularResize({ handle, el, x0, y0, w0, h0 }, dx, dy) {
@@ -290,7 +376,6 @@ function calcularResize({ handle, el, x0, y0, w0, h0 }, dx, dy) {
     return { x: Math.round(x), y: Math.round(y), ancho: Math.round(Math.max(20, w)), alto: Math.round(Math.max(20, h)) };
 }
 
-// Detecta el grupo contenedor potencial para la seleccion en movimiento.
 function grupoContenedorParaMover(dx, dy) {
     const seleccionados = elementosActuales.filter(e => seleccionIds.has(e.id));
     if (seleccionados.length === 0) return null;
@@ -298,12 +383,57 @@ function grupoContenedorParaMover(dx, dy) {
     return contenedorEn(elementosActuales, bb.x, bb.y, bb.ancho, bb.alto, new Set(seleccionIds));
 }
 
+function dibujarPreviewConector(origenId, ladoOrigen, x2, y2) {
+    const elO = elementosActuales.find(e => e.id === origenId);
+    if (!elO) { previewConectorEl.innerHTML = ""; return; }
+    const p1 = puntosConexion(elO)[ladoOrigen];
+    const elD = elementoBajoPointerExcluido(x2, y2, origenId);
+    let p2, lado2;
+    if (elD) {
+        lado2 = OPUESTO[ladoOrigen];
+        p2 = puntosConexion(elD)[lado2];
+    } else {
+        lado2 = OPUESTO[ladoOrigen];
+        p2 = { x: x2, y: y2 };
+    }
+    const puntos = trazarOrtogonal(p1, ladoOrigen, p2, lado2);
+    const d = puntosAPath(puntos);
+    previewConectorEl.innerHTML = "";
+    previewConectorEl.appendChild(nodo("path", {
+        d, fill: "none", stroke: "#0972D3",
+        "stroke-width": 1.5 / escala,
+        "stroke-dasharray": `${4/escala} ${2/escala}`,
+        "marker-end": "url(#amb-flecha-fin)",
+        "pointer-events": "none",
+    }));
+}
+
 function onPointerMove(e) {
-    if (!arrastre) return;
+    if (!arrastre) {
+        // Hover: mostrar puntos de conexion del elemento bajo el cursor
+        if (e.pointerType === "mouse") {
+            const { x, y } = screenACanvas(e.clientX, e.clientY);
+            let mejor = null, mejorArea = Infinity;
+            for (const el of elementosActuales) {
+                if (x >= el.x && y >= el.y && x <= el.x + el.ancho && y <= el.y + el.alto) {
+                    const area = el.ancho * el.alto;
+                    if (area < mejorArea) { mejorArea = area; mejor = el; }
+                }
+            }
+            dibujarPuntosConexion(mejor);
+        }
+        return;
+    }
     if (arrastre.tipo === "pan") {
         tx = arrastre.tx0 + e.clientX - arrastre.sx;
         ty = arrastre.ty0 + e.clientY - arrastre.sy;
         aplicarTransform(); return;
+    }
+    if (arrastre.tipo === "conector-nuevo") {
+        const { x, y } = screenACanvas(e.clientX, e.clientY);
+        arrastre.x = x; arrastre.y = y;
+        dibujarPreviewConector(arrastre.origenId, arrastre.ladoOrigen, x, y);
+        return;
     }
     if (arrastre.tipo === "mover") {
         const dx = (e.clientX - arrastre.sx) / escala;
@@ -316,7 +446,6 @@ function onPointerMove(e) {
         }
         const tempEls = elementosActuales.map(el => seleccionIds.has(el.id) ? { ...el, x: arrastre.posIni[el.id].x + dx, y: arrastre.posIni[el.id].y + dy } : el);
         dibujarSeleccionDe(tempEls.filter(el => seleccionIds.has(el.id)));
-        // Highlight del grupo contenedor al estilo Lucidchart
         mostrarHighlight(grupoContenedorParaMover(dx, dy));
         return;
     }
@@ -346,6 +475,20 @@ function onPointerMove(e) {
 
 function onPointerUp(e) {
     if (!arrastre) return;
+    if (arrastre.tipo === "conector-nuevo") {
+        previewConectorEl.innerHTML = "";
+        const { x, y } = screenACanvas(e.clientX, e.clientY);
+        const conxFija = puntoConexionBajoCanvas(x, y, arrastre.origenId);
+        if (conxFija) {
+            cb.onCrearConector?.(arrastre.origenId, arrastre.ladoOrigen, conxFija.elementoId, conxFija.lado);
+        } else {
+            const elD = elementoBajoPointerExcluido(x, y, arrastre.origenId);
+            if (elD) cb.onCrearConector?.(arrastre.origenId, arrastre.ladoOrigen, elD.id, null);
+        }
+        arrastre = null;
+        svgEl.style.cursor = "";
+        return;
+    }
     if (arrastre.tipo === "mover" && arrastre.movido) {
         const dx = (e.clientX - arrastre.sx) / escala;
         const dy = (e.clientY - arrastre.sy) / escala;
@@ -370,25 +513,50 @@ function onPointerUp(e) {
 }
 
 // --- Editor de etiqueta ---
-function onDblClick(e) {
-    if (editandoId) { confirmarEdicion(); return; }
-    const nodoEl = e.target.closest("[data-id]");
-    if (!nodoEl) return;
-    const el = elementosActuales.find(e2 => e2.id === nodoEl.dataset.id);
-    if (!el) return;
+function iniciarEdicion(el, etiquetaActual, sx, sy, ancho, alto) {
     editandoId = el.id;
-    const r = svgEl.getBoundingClientRect();
-    const sx = el.x * escala + tx + r.left;
-    const sy = el.y * escala + ty + r.top;
-    editorEl.value = el.etiqueta ?? "";
+    editorEl.value = etiquetaActual ?? "";
     editorEl.style.left   = sx + "px";
     editorEl.style.top    = sy + "px";
-    editorEl.style.width  = (el.ancho * escala) + "px";
-    editorEl.style.height = (el.alto * escala) + "px";
+    editorEl.style.width  = ancho + "px";
+    editorEl.style.height = alto + "px";
     editorEl.style.fontSize = Math.max(10, 13 * escala) + "px";
     editorEl.hidden = false;
     editorEl.focus();
     editorEl.select();
+}
+
+function onDblClick(e) {
+    if (editandoId) { confirmarEdicion(); return; }
+    // Conector: editar etiqueta en el punto medio
+    const conNodo = e.target.closest("[data-conector-id]");
+    if (conNodo) {
+        const con = conectoresActuales.find(c => c.id === conNodo.dataset.conectorId);
+        if (!con) return;
+        const puntos = calcularRuta(con, elementosActuales);
+        if (puntos.length < 2) return;
+        const mid = puntos[Math.floor(puntos.length / 2)];
+        const { sx, sy } = canvasAScreen(mid.x, mid.y);
+        editandoId = con.id;
+        editorEl.value = con.etiqueta ?? "";
+        editorEl.style.left = (sx - 40) + "px";
+        editorEl.style.top  = (sy - 12) + "px";
+        editorEl.style.width = "80px";
+        editorEl.style.height = "24px";
+        editorEl.style.fontSize = Math.max(10, 11 * escala) + "px";
+        editorEl.hidden = false;
+        editorEl.focus();
+        editorEl.select();
+        return;
+    }
+    const nodoEl = e.target.closest("[data-id]");
+    if (!nodoEl) return;
+    const el = elementosActuales.find(e2 => e2.id === nodoEl.dataset.id);
+    if (!el) return;
+    const r = svgEl.getBoundingClientRect();
+    iniciarEdicion(el, el.etiqueta,
+        el.x * escala + tx + r.left, el.y * escala + ty + r.top,
+        el.ancho * escala, el.alto * escala);
 }
 
 function confirmarEdicion() {
@@ -396,13 +564,15 @@ function confirmarEdicion() {
     const id = editandoId;
     editandoId = null;
     editorEl.hidden = true;
-    cb.onEtiqueta?.(id, editorEl.value);
+    // Determinar si es conector o elemento
+    if (conectoresActuales.find(c => c.id === id)) {
+        cb.onEtiquetaConector?.(id, editorEl.value);
+    } else {
+        cb.onEtiqueta?.(id, editorEl.value);
+    }
 }
 
-function cancelarEdicion() {
-    editandoId = null;
-    editorEl.hidden = true;
-}
+function cancelarEdicion() { editandoId = null; editorEl.hidden = true; }
 
 // --- Drag & drop desde paleta ---
 function onDragOver(e) {
@@ -437,10 +607,32 @@ export function iniciar(svg, raiz, cont, editor, callbacks) {
     svgEl = svg; raizEl = raiz; contEl = cont; editorEl = editor;
     cb = callbacks ?? {};
 
-    highlightEl = nodo("g", { id: "highlight-grupo", "pointer-events": "none" });
-    raizEl.appendChild(highlightEl);
+    // Marcador de flecha para conectores
+    const defs = document.createElementNS(NS, "defs");
+    const marker = document.createElementNS(NS, "marker");
+    marker.setAttribute("id", "amb-flecha-fin");
+    marker.setAttribute("viewBox", "0 0 10 10");
+    marker.setAttribute("refX", "9");
+    marker.setAttribute("refY", "5");
+    marker.setAttribute("markerWidth", "6");
+    marker.setAttribute("markerHeight", "6");
+    marker.setAttribute("orient", "auto-start-reverse");
+    const arrowPath = document.createElementNS(NS, "path");
+    arrowPath.setAttribute("d", "M 0 0 L 10 5 L 0 10 z");
+    arrowPath.setAttribute("fill", "#545B64");
+    marker.appendChild(arrowPath);
+    defs.appendChild(marker);
+    svgEl.insertBefore(defs, svgEl.firstChild);
 
-    overlayEl = nodo("g", { id: "overlay-sel", "pointer-events": "all" });
+    conectoresEl    = nodo("g", { id: "conectores",      "pointer-events": "all" });
+    puntosConexionEl = nodo("g", { id: "puntos-conexion", "pointer-events": "all" });
+    previewConectorEl = nodo("g", { id: "preview-conector", "pointer-events": "none" });
+    highlightEl     = nodo("g", { id: "highlight-grupo", "pointer-events": "none" });
+    overlayEl       = nodo("g", { id: "overlay-sel",     "pointer-events": "all" });
+    raizEl.appendChild(conectoresEl);
+    raizEl.appendChild(puntosConexionEl);
+    raizEl.appendChild(previewConectorEl);
+    raizEl.appendChild(highlightEl);
     raizEl.appendChild(overlayEl);
 
     bandaEl = nodo("rect", { id: "banda-sel", fill: "rgba(9,114,211,0.08)", stroke: "#0972D3", "stroke-width": "1", display: "none" });
@@ -451,6 +643,7 @@ export function iniciar(svg, raiz, cont, editor, callbacks) {
     svgEl.addEventListener("pointermove", onPointerMove);
     svgEl.addEventListener("pointerup", onPointerUp);
     svgEl.addEventListener("dblclick", onDblClick);
+    svgEl.addEventListener("mouseleave", () => { if (!arrastre) puntosConexionEl.innerHTML = ""; });
     contEl.addEventListener("dragover", onDragOver);
     contEl.addEventListener("dragleave", onDragLeave);
     contEl.addEventListener("drop", onDrop);

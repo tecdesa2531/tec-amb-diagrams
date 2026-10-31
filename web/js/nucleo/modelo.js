@@ -67,11 +67,16 @@ export function registrarIcono(doc, id, datos) {
 export function crearConector(origenId, destinoId, opciones = {}) {
     return {
         id: crypto.randomUUID(),
-        origen: { elementoId: origenId, modo: "auto" },
-        destino: { elementoId: destinoId, modo: "auto" },
+        origen:  { elementoId: origenId  ?? null, lado: opciones.ladoOrigen  ?? null, x: null, y: null },
+        destino: { elementoId: destinoId ?? null, lado: opciones.ladoDestino ?? null, x: null, y: null },
         quiebres: [],
         etiqueta: opciones.etiqueta ?? "",
-        estilo: opciones.estilo ?? {},
+        estilo: {
+            linea:       "solida",
+            puntaOrigen: "ninguna",
+            puntaDestino: "flecha",
+            ...(opciones.estilo ?? {}),
+        },
     };
 }
 

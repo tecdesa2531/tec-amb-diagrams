@@ -1,8 +1,8 @@
-import { crearDocumento, crearElemento, crearGrupo, actualizarElemento, eliminarElemento, agregarElemento, registrarIcono } from "./nucleo/modelo.js";
+import { crearDocumento, crearElemento, crearGrupo, crearConector, actualizarElemento, actualizarConector, eliminarElemento, eliminarConector, agregarElemento, agregarConector, registrarIcono } from "./nucleo/modelo.js";
 import { serializar, deserializar } from "./nucleo/formato.js";
 import { crearHistorial, empujar, deshacer as deshacerH, rehacer as rehacerH } from "./nucleo/historial.js";
 import { descendientes, contenedorEn } from "./nucleo/grupos.js";
-import { iniciar as iniciarLienzo, renderizar as renderizarL, ajustarAContenido, zoomEn, setSeleccion, limpiarSeleccion, obtenerSeleccion, moverSeleccion } from "./ui/lienzo.js";
+import { iniciar as iniciarLienzo, renderizar as renderizarL, ajustarAContenido, zoomEn, setSeleccion, limpiarSeleccion, obtenerSeleccion, obtenerSeleccionConector, moverSeleccion } from "./ui/lienzo.js";
 import { iniciar as iniciarPaleta } from "./ui/paleta.js";
 import { iniciar as iniciarProps, actualizar as actualizarProps } from "./ui/propiedades.js";
 import { iniciar as iniciarBarra, actualizarZoom } from "./ui/barra.js";
@@ -30,7 +30,7 @@ function limpiarPendiente() { hayPendientes = false; actualizarBarraTitulo(); }
 
 // --- Renderizado ---
 function renderizarLienzo() {
-    renderizarL(docActual.elementos, docActual.iconos ?? {});
+    renderizarL(docActual.elementos, docActual.conectores ?? [], docActual.iconos ?? {});
     actualizarProps(
         document.getElementById("propiedades"),
         docActual.elementos,
@@ -254,6 +254,15 @@ async function onDrop(datos, x, y) {
     }
 }
 
+// --- Callbacks de conectores ---
+function onCrearConector(origenId, ladoOrigen, destinoId, ladoDestino) {
+    accion(doc => agregarConector(doc, crearConector(origenId, destinoId, { ladoOrigen, ladoDestino })));
+}
+
+function onEtiquetaConector(id, etiqueta) {
+    accion(doc => actualizarConector(doc, id, { etiqueta }));
+}
+
 // --- Callbacks del panel de propiedades ---
 function onPropsCambio(id, cambios) {
     accion(doc => actualizarElemento(doc, id, cambios));
@@ -272,7 +281,7 @@ async function iniciar() {
         document.getElementById("raiz"),
         document.getElementById("lienzo-contenedor"),
         document.getElementById("etiqueta-editor"),
-        { onMover, onRedimensionar, onEtiqueta, onSeleccion, onZoom, onDrop }
+        { onMover, onRedimensionar, onEtiqueta, onSeleccion, onZoom, onDrop, onCrearConector, onEtiquetaConector }
     );
 
     iniciarPaleta(document.getElementById("paleta"), itemsIconos);
@@ -294,7 +303,14 @@ async function iniciar() {
         copiar,
         pegar,
         duplicar,
-        eliminar:        () => { const ids = [...obtenerSeleccion()]; if (!ids.length) return; accion(doc => ids.reduce((d, id) => eliminarElemento(d, id), doc)); limpiarSeleccion(); },
+        eliminar: () => {
+            const conId = obtenerSeleccionConector();
+            if (conId) { accion(doc => eliminarConector(doc, conId)); limpiarSeleccion(); return; }
+            const ids = [...obtenerSeleccion()];
+            if (!ids.length) return;
+            accion(doc => ids.reduce((d, id) => eliminarElemento(d, id), doc));
+            limpiarSeleccion();
+        },
         escape:          () => { limpiarSeleccion(); onSeleccion(new Set()); },
         moverFlecha:     (dx, dy) => { moverSeleccion(dx, dy); },
     });

@@ -1,0 +1,367 @@
+{
+  "formato": "ambito",
+  "version": 1,
+  "documento": {
+    "titulo": "Red de referencia AWS",
+    "creado": "2026-10-31T00:00:00.000Z",
+    "modificado": "2026-10-31T00:00:00.000Z"
+  },
+  "lienzo": {
+    "cuadricula": 10
+  },
+  "iconos": {},
+  "elementos": [
+    {
+      "id": "ref-001",
+      "tipo": "grupo",
+      "subtipo": "aws-cloud",
+      "x": 340,
+      "y": 20,
+      "ancho": 1220,
+      "alto": 880,
+      "etiqueta": "AWS Cloud",
+      "padre": null,
+      "estilo": {}
+    },
+    {
+      "id": "ref-002",
+      "tipo": "grupo",
+      "subtipo": "region",
+      "x": 380,
+      "y": 60,
+      "ancho": 1140,
+      "alto": 800,
+      "etiqueta": "us-east-1",
+      "padre": "ref-001",
+      "estilo": {}
+    },
+    {
+      "id": "ref-003",
+      "tipo": "grupo",
+      "subtipo": "vpc",
+      "x": 420,
+      "y": 100,
+      "ancho": 1060,
+      "alto": 720,
+      "etiqueta": "VPC 10.0.0.0/16",
+      "padre": "ref-002",
+      "estilo": {}
+    },
+    {
+      "id": "ref-004",
+      "tipo": "grupo",
+      "subtipo": "zona-disponibilidad",
+      "x": 440,
+      "y": 150,
+      "ancho": 480,
+      "alto": 630,
+      "etiqueta": "AZ us-east-1a",
+      "padre": "ref-003",
+      "estilo": {}
+    },
+    {
+      "id": "ref-005",
+      "tipo": "grupo",
+      "subtipo": "subnet-publica",
+      "x": 460,
+      "y": 200,
+      "ancho": 440,
+      "alto": 170,
+      "etiqueta": "Public subnet 1",
+      "padre": "ref-004",
+      "estilo": {}
+    },
+    {
+      "id": "ref-006",
+      "tipo": "grupo",
+      "subtipo": "subnet-privada",
+      "x": 460,
+      "y": 410,
+      "ancho": 440,
+      "alto": 310,
+      "etiqueta": "Private subnet 1",
+      "padre": "ref-004",
+      "estilo": {}
+    },
+    {
+      "id": "ref-007",
+      "tipo": "grupo",
+      "subtipo": "zona-disponibilidad",
+      "x": 980,
+      "y": 150,
+      "ancho": 480,
+      "alto": 630,
+      "etiqueta": "AZ us-east-1b",
+      "padre": "ref-003",
+      "estilo": {}
+    },
+    {
+      "id": "ref-008",
+      "tipo": "grupo",
+      "subtipo": "subnet-publica",
+      "x": 1000,
+      "y": 200,
+      "ancho": 440,
+      "alto": 170,
+      "etiqueta": "Public subnet 2",
+      "padre": "ref-007",
+      "estilo": {}
+    },
+    {
+      "id": "ref-009",
+      "tipo": "grupo",
+      "subtipo": "subnet-privada",
+      "x": 1000,
+      "y": 410,
+      "ancho": 440,
+      "alto": 310,
+      "etiqueta": "Private subnet 2",
+      "padre": "ref-007",
+      "estilo": {}
+    },
+    {
+      "id": "ref-010",
+      "tipo": "elemento",
+      "x": 40,
+      "y": 380,
+      "ancho": 120,
+      "alto": 60,
+      "etiqueta": "Usuario externo",
+      "padre": null,
+      "estilo": {}
+    },
+    {
+      "id": "ref-011",
+      "tipo": "elemento",
+      "x": 200,
+      "y": 380,
+      "ancho": 120,
+      "alto": 60,
+      "etiqueta": "Internet Gateway",
+      "padre": null,
+      "estilo": {}
+    },
+    {
+      "id": "ref-012",
+      "tipo": "elemento",
+      "x": 560,
+      "y": 225,
+      "ancho": 120,
+      "alto": 60,
+      "etiqueta": "ALB",
+      "padre": "ref-005",
+      "estilo": {}
+    },
+    {
+      "id": "ref-013",
+      "tipo": "elemento",
+      "x": 1080,
+      "y": 225,
+      "ancho": 120,
+      "alto": 60,
+      "etiqueta": "ALB (standby)",
+      "padre": "ref-008",
+      "estilo": {}
+    },
+    {
+      "id": "ref-014",
+      "tipo": "elemento",
+      "x": 490,
+      "y": 445,
+      "ancho": 120,
+      "alto": 60,
+      "etiqueta": "NAT Gateway",
+      "padre": "ref-006",
+      "estilo": {}
+    },
+    {
+      "id": "ref-015",
+      "tipo": "elemento",
+      "x": 660,
+      "y": 445,
+      "ancho": 120,
+      "alto": 60,
+      "etiqueta": "EC2 Web 1",
+      "padre": "ref-006",
+      "estilo": {}
+    },
+    {
+      "id": "ref-016",
+      "tipo": "elemento",
+      "x": 1040,
+      "y": 445,
+      "ancho": 120,
+      "alto": 60,
+      "etiqueta": "EC2 Web 2",
+      "padre": "ref-009",
+      "estilo": {}
+    },
+    {
+      "id": "ref-017",
+      "tipo": "elemento",
+      "x": 1200,
+      "y": 445,
+      "ancho": 120,
+      "alto": 60,
+      "etiqueta": "RDS Primary",
+      "padre": "ref-009",
+      "estilo": {}
+    }
+  ],
+  "conectores": [
+    {
+      "id": "ref-018",
+      "origen": {
+        "elementoId": "ref-010",
+        "lado": null,
+        "x": null,
+        "y": null
+      },
+      "destino": {
+        "elementoId": "ref-011",
+        "lado": null,
+        "x": null,
+        "y": null
+      },
+      "quiebres": [],
+      "etiqueta": "HTTPS",
+      "estilo": {
+        "linea": "solida",
+        "puntaOrigen": "ninguna",
+        "puntaDestino": "flecha"
+      }
+    },
+    {
+      "id": "ref-019",
+      "origen": {
+        "elementoId": "ref-011",
+        "lado": null,
+        "x": null,
+        "y": null
+      },
+      "destino": {
+        "elementoId": "ref-012",
+        "lado": null,
+        "x": null,
+        "y": null
+      },
+      "quiebres": [],
+      "etiqueta": "HTTP/HTTPS",
+      "estilo": {
+        "linea": "solida",
+        "puntaOrigen": "ninguna",
+        "puntaDestino": "flecha"
+      }
+    },
+    {
+      "id": "ref-020",
+      "origen": {
+        "elementoId": "ref-012",
+        "lado": null,
+        "x": null,
+        "y": null
+      },
+      "destino": {
+        "elementoId": "ref-015",
+        "lado": null,
+        "x": null,
+        "y": null
+      },
+      "quiebres": [],
+      "etiqueta": "8080",
+      "estilo": {
+        "linea": "solida",
+        "puntaOrigen": "ninguna",
+        "puntaDestino": "flecha"
+      }
+    },
+    {
+      "id": "ref-021",
+      "origen": {
+        "elementoId": "ref-012",
+        "lado": null,
+        "x": null,
+        "y": null
+      },
+      "destino": {
+        "elementoId": "ref-016",
+        "lado": null,
+        "x": null,
+        "y": null
+      },
+      "quiebres": [],
+      "etiqueta": "8080",
+      "estilo": {
+        "linea": "solida",
+        "puntaOrigen": "ninguna",
+        "puntaDestino": "flecha"
+      }
+    },
+    {
+      "id": "ref-022",
+      "origen": {
+        "elementoId": "ref-015",
+        "lado": "right",
+        "x": null,
+        "y": null
+      },
+      "destino": {
+        "elementoId": "ref-017",
+        "lado": "left",
+        "x": null,
+        "y": null
+      },
+      "quiebres": [],
+      "etiqueta": "3306",
+      "estilo": {
+        "linea": "solida",
+        "puntaOrigen": "ninguna",
+        "puntaDestino": "flecha"
+      }
+    },
+    {
+      "id": "ref-023",
+      "origen": {
+        "elementoId": "ref-016",
+        "lado": "right",
+        "x": null,
+        "y": null
+      },
+      "destino": {
+        "elementoId": "ref-017",
+        "lado": "left",
+        "x": null,
+        "y": null
+      },
+      "quiebres": [],
+      "etiqueta": "3306",
+      "estilo": {
+        "linea": "solida",
+        "puntaOrigen": "ninguna",
+        "puntaDestino": "flecha"
+      }
+    },
+    {
+      "id": "ref-024",
+      "origen": {
+        "elementoId": "ref-014",
+        "lado": null,
+        "x": null,
+        "y": null
+      },
+      "destino": {
+        "elementoId": "ref-011",
+        "lado": null,
+        "x": null,
+        "y": null
+      },
+      "quiebres": [],
+      "etiqueta": "",
+      "estilo": {
+        "linea": "solida",
+        "puntaOrigen": "ninguna",
+        "puntaDestino": "flecha"
+      }
+    }
+  ]
+}

@@ -4,6 +4,7 @@ import { TIPOS_GRUPO } from "../nucleo/modelo.js";
 import { contenedorEn, ordenDibujo } from "../nucleo/grupos.js";
 import { puntosConexion, calcularRuta, puntosAPath, OPUESTO, ladoAutoOrigen, trazarOrtogonal } from "../nucleo/enrutado.js";
 import { calcularGuias, aplicarSnap, detectarEspaciadoIgual } from "../nucleo/guias.js";
+import { COLOR_BORDE, COLOR_TEXTO, COLOR_TEXTO_SEC, COLOR_SELECCION, TAM_NORMAL, ICONO_ETIQUETA_OFFSET, GROSOR_NORMAL } from "../nucleo/estilo.js";
 
 const NS = "http://www.w3.org/2000/svg";
 const ESCALA_MIN = 0.25;
@@ -115,7 +116,7 @@ function elementoBajoPointerExcluido(x, y, excluirId) {
 // --- Renderizado de elementos ---
 function nodoCaja(el) {
     const g = nodo("g", { "data-id": el.id, "data-tipo": el.tipo, cursor: "move" });
-    g.appendChild(nodo("rect", { x: el.x, y: el.y, width: el.ancho, height: el.alto, fill: "#ffffff", stroke: "#9BA7B4", "stroke-width": "1.5", rx: "4" }));
+    g.appendChild(nodo("rect", { x: el.x, y: el.y, width: el.ancho, height: el.alto, fill: "#ffffff", stroke: COLOR_BORDE, "stroke-width": GROSOR_NORMAL, rx: "4" }));
     if (el.etiqueta) {
         const t = nodo("text", { x: el.x + el.ancho / 2, y: el.y + el.alto / 2, "text-anchor": "middle", "dominant-baseline": "middle", "font-size": "13", "font-family": "system-ui, sans-serif", fill: "#232F3E" });
         t.textContent = el.etiqueta;
@@ -133,7 +134,7 @@ function nodoIcono(el, iconos) {
     else if (datos.ruta) href = datos.ruta;
     if (href) g.appendChild(nodo("image", { x: el.x, y: el.y, width: el.ancho, height: el.alto, href }));
     if (el.etiqueta) {
-        const t = nodo("text", { x: el.x + el.ancho / 2, y: el.y + el.alto + 14, "text-anchor": "middle", "font-size": "12", "font-family": "system-ui, sans-serif", fill: "#232F3E" });
+        const t = nodo("text", { x: el.x + el.ancho / 2, y: el.y + el.alto + ICONO_ETIQUETA_OFFSET, "text-anchor": "middle", "dominant-baseline": "hanging", "font-size": "12", "font-family": "system-ui, sans-serif", fill: COLOR_TEXTO });
         t.textContent = el.etiqueta;
         g.appendChild(t);
     }
@@ -144,8 +145,8 @@ function nodoGrupo(el) {
     const def = TIPOS_GRUPO[el.subtipo] ?? TIPOS_GRUPO["generico"];
     const g = nodo("g", { "data-id": el.id, "data-tipo": "grupo", cursor: "move" });
     const dasharray = def.linea === "discontinua" ? "8 4" : "none";
-    g.appendChild(nodo("rect", { x: el.x, y: el.y, width: el.ancho, height: el.alto, fill: def.relleno ?? "none", stroke: def.borde, "stroke-width": "2", rx: "4", "stroke-dasharray": dasharray }));
-    const t = nodo("text", { x: el.x + 8, y: el.y + 16, "font-size": "11", "font-family": "system-ui, sans-serif", fill: def.borde, "font-weight": "600", "pointer-events": "none" });
+    g.appendChild(nodo("rect", { x: el.x, y: el.y, width: el.ancho, height: el.alto, fill: def.relleno ?? "none", stroke: def.borde, "stroke-width": GROSOR_NORMAL, rx: "0", "stroke-dasharray": dasharray }));
+    const t = nodo("text", { x: el.x + 8, y: el.y + 16, "font-size": TAM_NORMAL, "font-family": "system-ui, sans-serif", fill: def.borde, "font-weight": "600", "pointer-events": "none" });
     t.textContent = el.etiqueta || def.nombre;
     g.appendChild(t);
     return g;
@@ -176,7 +177,17 @@ function nodoConector(con, elementos, seleccionado) {
     }));
     if (con.etiqueta) {
         const mid = puntos[Math.floor(puntos.length / 2)];
-        const t = nodo("text", { x: mid.x, y: mid.y - 6 / escala, "text-anchor": "middle", "font-size": 11 / escala, "font-family": "system-ui, sans-serif", fill: "#232F3E", "pointer-events": "none" });
+        const t = nodo("text", {
+            x: mid.x, y: mid.y - 6 / escala,
+            "text-anchor": "middle",
+            "font-size": 11 / escala,
+            "font-family": "system-ui, sans-serif",
+            fill: COLOR_TEXTO,
+            stroke: "#ffffff",
+            "stroke-width": 4 / escala,
+            "paint-order": "stroke",
+            "pointer-events": "none",
+        });
         t.textContent = con.etiqueta;
         g.appendChild(t);
     }

@@ -1,6 +1,7 @@
-// Panel izquierdo: buscador, formas basicas e iconos AWS con drag-to-canvas.
+// Panel izquierdo: buscador, formas basicas, grupos AWS e iconos AWS con drag-to-canvas.
 
 import { buscar } from "../nucleo/catalogo.js";
+import { TIPOS_GRUPO } from "../nucleo/modelo.js";
 
 const FORMAS = [
     { tipo: "caja",   etiqueta: "Caja",  simbolo: "B" },
@@ -19,6 +20,13 @@ function crearItemDraggable(datos) {
         img.alt = datos.nombre ?? "";
         img.className = "paleta-item-img";
         item.appendChild(img);
+    } else if (datos.colorIndicador) {
+        const ic = document.createElement("span");
+        ic.className = "paleta-grupo-icono";
+        ic.style.borderColor = datos.colorIndicador;
+        ic.style.borderStyle = datos.lineaIndicador === "discontinua" ? "dashed" : "solid";
+        ic.style.background = datos.rellenoIndicador ?? "transparent";
+        item.appendChild(ic);
     } else {
         const ic = document.createElement("span");
         ic.className = "paleta-forma-icono";
@@ -35,6 +43,7 @@ function crearItemDraggable(datos) {
         e.dataTransfer.effectAllowed = "copy";
         e.dataTransfer.setData("text/plain", JSON.stringify({
             tipo:     datos.tipo,
+            subtipo:  datos.subtipo ?? null,
             icono:    datos.icono ?? null,
             etiqueta: datos.nombre ?? datos.etiqueta ?? "",
             ruta:     datos.ruta ?? null,
@@ -49,6 +58,26 @@ function renderizarFormas(contenedor) {
     titulo.textContent = "Formas";
     contenedor.appendChild(titulo);
     for (const f of FORMAS) contenedor.appendChild(crearItemDraggable(f));
+}
+
+function renderizarGrupos(contenedor) {
+    const titulo = document.createElement("p");
+    titulo.className = "paleta-seccion-titulo";
+    titulo.textContent = "Grupos AWS";
+    contenedor.appendChild(titulo);
+    const grid = document.createElement("div");
+    grid.className = "paleta-seccion paleta-grid";
+    for (const [subtipo, def] of Object.entries(TIPOS_GRUPO)) {
+        grid.appendChild(crearItemDraggable({
+            tipo: "grupo",
+            subtipo,
+            nombre: def.nombre,
+            colorIndicador:   def.borde,
+            lineaIndicador:   def.linea,
+            rellenoIndicador: def.relleno,
+        }));
+    }
+    contenedor.appendChild(grid);
 }
 
 function renderizarIconos(contenedor, items) {
@@ -79,6 +108,8 @@ export function iniciar(panel, items) {
     secFormas.className = "paleta-seccion";
     renderizarFormas(secFormas);
     panel.appendChild(secFormas);
+
+    renderizarGrupos(panel);
 
     const secTituloIconos = document.createElement("p");
     secTituloIconos.className = "paleta-seccion-titulo";

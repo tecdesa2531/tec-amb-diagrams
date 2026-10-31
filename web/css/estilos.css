@@ -229,6 +229,14 @@ body {
   color: var(--color-texto-sec);
 }
 
+.paleta-grupo-icono {
+  width: 32px;
+  height: 22px;
+  border-width: 2px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
 .paleta-item-nombre {
   font-size: 10px;
   color: var(--color-texto-sec);

@@ -1,6 +1,7 @@
-import { crearDocumento, crearElemento, actualizarElemento, eliminarElemento, agregarElemento, registrarIcono } from "./nucleo/modelo.js";
+import { crearDocumento, crearElemento, crearGrupo, actualizarElemento, eliminarElemento, agregarElemento, registrarIcono } from "./nucleo/modelo.js";
 import { serializar, deserializar } from "./nucleo/formato.js";
 import { crearHistorial, empujar, deshacer as deshacerH, rehacer as rehacerH } from "./nucleo/historial.js";
+import { descendientes, contenedorEn } from "./nucleo/grupos.js";
 import { iniciar as iniciarLienzo, renderizar as renderizarL, ajustarAContenido, zoomEn, setSeleccion, limpiarSeleccion, obtenerSeleccion, moverSeleccion } from "./ui/lienzo.js";
 import { iniciar as iniciarPaleta } from "./ui/paleta.js";
 import { iniciar as iniciarProps, actualizar as actualizarProps } from "./ui/propiedades.js";
@@ -91,7 +92,7 @@ function guardar() {
 }
 
 // --- Modal guardar como ---
-const modal      = document.getElementById("modal-guardar-como");
+const modal       = document.getElementById("modal-guardar-como");
 const inputNombre = document.getElementById("modal-nombre");
 
 function abrirModalGuardarComo() {
@@ -160,8 +161,47 @@ function pegar() {
 function duplicar() { copiar(); pegar(); }
 
 // --- Callbacks del lienzo ---
+
+// Mueve los elementos seleccionados, sus descendientes (si son grupos) y actualiza
+// el padre de cada elemento movido segun donde termino (re-parentado Lucidchart).
 function onMover(movidos) {
-    accion(doc => movidos.reduce((d, { id, x, y }) => actualizarElemento(d, id, { x, y }), doc));
+    accion(doc => {
+        // Mapa de id -> nuevo {x, y} y delta
+        const deltaMap = new Map();
+        for (const m of movidos) {
+            const orig = doc.elementos.find(e => e.id === m.id);
+            if (orig) deltaMap.set(m.id, { newX: m.x, newY: m.y, dx: m.x - orig.x, dy: m.y - orig.y });
+        }
+
+        // Elementos que se mueven arrastrados por un grupo padre seleccionado
+        const autoMovidos = new Map();
+        for (const [id, { dx, dy }] of deltaMap) {
+            const el = doc.elementos.find(e => e.id === id);
+            if (el?.tipo !== "grupo") continue;
+            for (const descId of descendientes(doc, id)) {
+                if (deltaMap.has(descId)) continue;
+                const desc = doc.elementos.find(e => e.id === descId);
+                if (desc) autoMovidos.set(descId, { x: desc.x + dx, y: desc.y + dy });
+            }
+        }
+
+        let d = doc;
+        for (const { id, x, y } of movidos) d = actualizarElemento(d, id, { x, y });
+        for (const [id, { x, y }] of autoMovidos) d = actualizarElemento(d, id, { x, y });
+
+        // Re-parentado: cada elemento movido directamente puede cambiar de grupo padre
+        const autoMovidosIds = new Set(autoMovidos.keys());
+        for (const m of movidos) {
+            if (autoMovidosIds.has(m.id)) continue;
+            const el = d.elementos.find(e => e.id === m.id);
+            if (!el) continue;
+            const excluir = new Set([m.id, ...descendientes(d, m.id)]);
+            const nuevoPadre = contenedorEn(d.elementos, m.x, m.y, el.ancho, el.alto, excluir);
+            if (nuevoPadre !== el.padre) d = actualizarElemento(d, m.id, { padre: nuevoPadre });
+        }
+
+        return d;
+    });
 }
 
 function onRedimensionar(id, geom) {
@@ -179,17 +219,35 @@ function onSeleccion(ids) {
 function onZoom(porcentaje) { actualizarZoom(porcentaje); }
 
 async function onDrop(datos, x, y) {
-    const cx = x - Math.round((datos.tipo === "icono" ? 48 : 120) / 2);
-    const cy = y - Math.round((datos.tipo === "icono" ? 48 : 60) / 2);
-    const el = crearElemento(datos.tipo, cx, cy, { etiqueta: datos.etiqueta ?? "", icono: datos.icono ?? null });
+    const esGrupo = datos.tipo === "grupo";
+    const esIcono = datos.tipo === "icono";
+    const ancho = esGrupo ? 300 : (esIcono ? 48 : 120);
+    const alto  = esGrupo ? 200 : (esIcono ? 48 : 60);
+    const cx = x - Math.round(ancho / 2);
+    const cy = y - Math.round(alto / 2);
+
+    let el;
+    if (esGrupo) {
+        el = crearGrupo(datos.subtipo, cx, cy, { etiqueta: datos.etiqueta ?? "" });
+    } else {
+        el = crearElemento(datos.tipo, cx, cy, { etiqueta: datos.etiqueta ?? "", icono: datos.icono ?? null });
+    }
+
     let d = agregarElemento(docActual, el);
-    if (datos.tipo === "icono" && datos.icono && datos.ruta) {
+
+    // Detectar padre (re-parentado Lucidchart al soltar)
+    const padre = contenedorEn(d.elementos, cx, cy, ancho, alto, new Set([el.id]));
+    if (padre) d = actualizarElemento(d, el.id, { padre });
+
+    // Embeber SVG para iconos
+    if (esIcono && datos.icono && datos.ruta) {
         try {
             const res = await fetch(datos.ruta);
             const svg = await res.text();
             d = registrarIcono(d, datos.icono, { nombre: datos.etiqueta, ruta: datos.ruta, svg });
         } catch { /* seguir sin SVG embebido */ }
     }
+
     if (aplicarCambio(d)) {
         setSeleccion([el.id]);
         renderizarLienzo();
@@ -203,14 +261,12 @@ function onPropsCambio(id, cambios) {
 
 // --- Inicializacion ---
 async function iniciar() {
-    // Cargar catalogo de iconos
     let itemsIconos = [];
     try {
         const res = await fetch("/api/iconos");
         if (res.ok) itemsIconos = await res.json();
     } catch { /* sin iconos */ }
 
-    // Init lienzo
     iniciarLienzo(
         document.getElementById("lienzo"),
         document.getElementById("raiz"),
@@ -219,20 +275,15 @@ async function iniciar() {
         { onMover, onRedimensionar, onEtiqueta, onSeleccion, onZoom, onDrop }
     );
 
-    // Init paleta
     iniciarPaleta(document.getElementById("paleta"), itemsIconos);
-
-    // Init propiedades
     iniciarProps(document.getElementById("propiedades"), { onChange: onPropsCambio });
 
-    // Init barra
     iniciarBarra({
         onZoomMas:   () => zoomEn(1.25),
         onZoomMenos: () => zoomEn(0.8),
         onAjustar:   () => ajustarAContenido(docActual.elementos, [...obtenerSeleccion()].length > 0),
     });
 
-    // Init atajos
     iniciarAtajos({
         guardar,
         guardarComo:     abrirModalGuardarComo,
@@ -248,7 +299,6 @@ async function iniciar() {
         moverFlecha:     (dx, dy) => { moverSeleccion(dx, dy); },
     });
 
-    // Primer render
     renderizarLienzo();
     limpiarPendiente();
     console.log("Ambito iniciado");

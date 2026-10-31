@@ -1,5 +1,8 @@
 // Lienzo SVG interactivo: pan/zoom, seleccion, mover, redimensionar, editar etiqueta.
 
+import { TIPOS_GRUPO } from "../nucleo/modelo.js";
+import { contenedorEn, ordenDibujo } from "../nucleo/grupos.js";
+
 const NS = "http://www.w3.org/2000/svg";
 const ESCALA_MIN = 0.25;
 const ESCALA_MAX = 4.0;
@@ -12,10 +15,11 @@ let tx = 0, ty = 0, escala = 1.0;
 let seleccionIds = new Set();
 let cb = {};
 let elementosActuales = [], iconosActuales = {};
-let overlayEl = null, bandaEl = null;
+let overlayEl = null, bandaEl = null, highlightEl = null;
 let arrastre = null;
 let editandoId = null;
 let espacioPresionado = false;
+let grupoHighlightId = null;
 
 // --- SVG helpers ---
 function nodo(tag, attrs) {
@@ -41,7 +45,33 @@ function aplicarTransform() {
     cb.onZoom?.(Math.round(escala * 100));
 }
 
-// --- Renderizado ---
+// --- Highlight de contenedor (estilo Lucidchart) ---
+function mostrarHighlight(grupoId) {
+    if (grupoHighlightId === grupoId) return;
+    grupoHighlightId = grupoId;
+    highlightEl.innerHTML = "";
+    if (!grupoId) return;
+    const g = elementosActuales.find(e => e.id === grupoId);
+    if (!g) return;
+    const def = TIPOS_GRUPO[g.subtipo] ?? { borde: "#0972D3" };
+    const m = 4 / escala;
+    highlightEl.appendChild(nodo("rect", {
+        x: g.x - m, y: g.y - m,
+        width: g.ancho + m * 2, height: g.alto + m * 2,
+        fill: def.borde + "20",
+        stroke: def.borde,
+        "stroke-width": 3 / escala,
+        rx: 6 / escala,
+        "pointer-events": "none",
+    }));
+}
+
+function ocultarHighlight() {
+    grupoHighlightId = null;
+    highlightEl.innerHTML = "";
+}
+
+// --- Renderizado de elementos ---
 function nodoCaja(el) {
     const g = nodo("g", { "data-id": el.id, "data-tipo": el.tipo, cursor: "move" });
     g.appendChild(nodo("rect", { x: el.x, y: el.y, width: el.ancho, height: el.alto, fill: "#ffffff", stroke: "#9BA7B4", "stroke-width": "1.5", rx: "4" }));
@@ -74,8 +104,35 @@ function nodoIcono(el, iconos) {
     return g;
 }
 
+function nodoGrupo(el) {
+    const def = TIPOS_GRUPO[el.subtipo] ?? TIPOS_GRUPO["generico"];
+    const g = nodo("g", { "data-id": el.id, "data-tipo": "grupo", cursor: "move" });
+    const dasharray = def.linea === "discontinua" ? "8 4" : "none";
+    g.appendChild(nodo("rect", {
+        x: el.x, y: el.y, width: el.ancho, height: el.alto,
+        fill: def.relleno ?? "none",
+        stroke: def.borde,
+        "stroke-width": "2",
+        rx: "4",
+        "stroke-dasharray": dasharray,
+    }));
+    // Etiqueta en la esquina superior izquierda, dentro del borde
+    const etiq = el.etiqueta || def.nombre;
+    const t = nodo("text", {
+        x: el.x + 8, y: el.y + 16,
+        "font-size": "11", "font-family": "system-ui, sans-serif",
+        fill: def.borde, "font-weight": "600",
+        "pointer-events": "none",
+    });
+    t.textContent = etiq;
+    g.appendChild(t);
+    return g;
+}
+
 function nodoElemento(el, iconos) {
-    return el.tipo === "icono" ? nodoIcono(el, iconos) : nodoCaja(el);
+    if (el.tipo === "grupo") return nodoGrupo(el);
+    if (el.tipo === "icono") return nodoIcono(el, iconos);
+    return nodoCaja(el);
 }
 
 // --- Seleccion visual ---
@@ -124,7 +181,7 @@ export function renderizar(elementos, iconos) {
     elementosActuales = elementos;
     iconosActuales = iconos ?? {};
     Array.from(raizEl.children).filter(n => n.dataset?.id).forEach(n => n.remove());
-    for (const el of elementos) {
+    for (const el of ordenDibujo(elementos)) {
         raizEl.insertBefore(nodoElemento(el, iconosActuales), overlayEl);
     }
     dibujarSeleccion();
@@ -233,6 +290,14 @@ function calcularResize({ handle, el, x0, y0, w0, h0 }, dx, dy) {
     return { x: Math.round(x), y: Math.round(y), ancho: Math.round(Math.max(20, w)), alto: Math.round(Math.max(20, h)) };
 }
 
+// Detecta el grupo contenedor potencial para la seleccion en movimiento.
+function grupoContenedorParaMover(dx, dy) {
+    const seleccionados = elementosActuales.filter(e => seleccionIds.has(e.id));
+    if (seleccionados.length === 0) return null;
+    const bb = boundingBox(seleccionados.map(e => ({ ...e, x: e.x + dx, y: e.y + dy })));
+    return contenedorEn(elementosActuales, bb.x, bb.y, bb.ancho, bb.alto, new Set(seleccionIds));
+}
+
 function onPointerMove(e) {
     if (!arrastre) return;
     if (arrastre.tipo === "pan") {
@@ -251,6 +316,8 @@ function onPointerMove(e) {
         }
         const tempEls = elementosActuales.map(el => seleccionIds.has(el.id) ? { ...el, x: arrastre.posIni[el.id].x + dx, y: arrastre.posIni[el.id].y + dy } : el);
         dibujarSeleccionDe(tempEls.filter(el => seleccionIds.has(el.id)));
+        // Highlight del grupo contenedor al estilo Lucidchart
+        mostrarHighlight(grupoContenedorParaMover(dx, dy));
         return;
     }
     if (arrastre.tipo === "resize") {
@@ -283,6 +350,7 @@ function onPointerUp(e) {
         const dx = (e.clientX - arrastre.sx) / escala;
         const dy = (e.clientY - arrastre.sy) / escala;
         const movidos = elementosActuales.filter(el => seleccionIds.has(el.id)).map(el => ({ id: el.id, x: Math.round(arrastre.posIni[el.id].x + dx), y: Math.round(arrastre.posIni[el.id].y + dy) }));
+        ocultarHighlight();
         cb.onMover?.(movidos);
     }
     if (arrastre.tipo === "resize") {
@@ -337,10 +405,18 @@ function cancelarEdicion() {
 }
 
 // --- Drag & drop desde paleta ---
-function onDragOver(e) { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; }
+function onDragOver(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+    const { x, y } = screenACanvas(e.clientX, e.clientY);
+    mostrarHighlight(contenedorEn(elementosActuales, x - 1, y - 1, 2, 2, new Set()));
+}
+
+function onDragLeave() { ocultarHighlight(); }
 
 function onDrop(e) {
     e.preventDefault();
+    ocultarHighlight();
     let datos;
     try { datos = JSON.parse(e.dataTransfer.getData("text/plain")); } catch { return; }
     const r = svgEl.getBoundingClientRect();
@@ -361,6 +437,9 @@ export function iniciar(svg, raiz, cont, editor, callbacks) {
     svgEl = svg; raizEl = raiz; contEl = cont; editorEl = editor;
     cb = callbacks ?? {};
 
+    highlightEl = nodo("g", { id: "highlight-grupo", "pointer-events": "none" });
+    raizEl.appendChild(highlightEl);
+
     overlayEl = nodo("g", { id: "overlay-sel", "pointer-events": "all" });
     raizEl.appendChild(overlayEl);
 
@@ -373,6 +452,7 @@ export function iniciar(svg, raiz, cont, editor, callbacks) {
     svgEl.addEventListener("pointerup", onPointerUp);
     svgEl.addEventListener("dblclick", onDblClick);
     contEl.addEventListener("dragover", onDragOver);
+    contEl.addEventListener("dragleave", onDragLeave);
     contEl.addEventListener("drop", onDrop);
 
     editorEl.addEventListener("blur", confirmarEdicion);

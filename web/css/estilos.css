@@ -318,6 +318,68 @@ body {
   border-color: var(--color-seleccion);
 }
 
+/* === Exportar dropdown === */
+.exportar-wrapper {
+  position: relative;
+}
+
+#btn-exportar {
+  padding: 4px 12px;
+  font-size: var(--tam-normal);
+  font-family: var(--fuente);
+  background: var(--color-fondo-panel);
+  color: var(--color-texto);
+  border: 1px solid var(--color-borde);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+#btn-exportar:hover { background: var(--color-borde); }
+
+#exportar-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  background: #fff;
+  border: 1px solid var(--color-borde);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  min-width: 120px;
+  padding: 4px;
+}
+
+#exportar-menu[hidden] { display: none; }
+
+.exportar-item {
+  font-family: var(--fuente);
+  font-size: var(--tam-normal);
+  padding: 6px 12px;
+  background: transparent;
+  color: var(--color-texto);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.exportar-item:hover { background: var(--color-fondo-panel); }
+
+/* === Impresion / PDF === */
+@media print {
+  #barra, #paleta, #propiedades, #etiqueta-editor, #modal-guardar-como { display: none !important; }
+  #overlay-sel, #banda-sel, #guias-visual, #puntos-conexion, #preview-conector, #highlight-grupo, #fondo-cuadricula { display: none !important; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { background: #fff; overflow: visible; height: auto; }
+  #app { display: block; height: auto; }
+  #lienzo-contenedor { width: 100vw; height: 100vh; overflow: visible; position: static; }
+  #lienzo { width: 100%; height: 100%; display: block; }
+  @page { margin: 10mm; size: A4 landscape; }
+}
+
 /* === Modal guardar como === */
 .modal-fondo {
   position: fixed;

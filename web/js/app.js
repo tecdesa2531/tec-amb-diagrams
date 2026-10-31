@@ -1,5 +1,6 @@
 import { crearDocumento, crearElemento, crearGrupo, crearConector, actualizarElemento, actualizarConector, eliminarElemento, eliminarConector, agregarElemento, agregarConector, registrarIcono } from "./nucleo/modelo.js";
 import { alinear, distribuir, igualarTamano } from "./nucleo/guias.js";
+import { exportarPNG, exportarPDF } from "./ui/exportar.js";
 import { serializar, deserializar } from "./nucleo/formato.js";
 import { crearHistorial, empujar, deshacer as deshacerH, rehacer as rehacerH } from "./nucleo/historial.js";
 import { descendientes, contenedorEn } from "./nucleo/grupos.js";
@@ -304,6 +305,16 @@ async function iniciar() {
         onZoomMas:   () => zoomEn(1.25),
         onZoomMenos: () => zoomEn(0.8),
         onAjustar:   () => ajustarAContenido(docActual.elementos, [...obtenerSeleccion()].length > 0),
+        onExportarPNG: factor => exportarPNG(
+            document.getElementById("lienzo"),
+            docActual.elementos,
+            factor,
+            docActual.documento.titulo
+        ),
+        onExportarPDF: () => {
+            ajustarAContenido(docActual.elementos, false);
+            exportarPDF();
+        },
     });
 
     iniciarAtajos({
